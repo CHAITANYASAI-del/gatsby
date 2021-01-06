@@ -1,0 +1,105 @@
+// https://medium.com/@garry.passarella/create-and-deploy-an-aws-lambda-function-with-aws-cloudformation-583d5a2b1df0
+// https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Resources": {
+    
+    "PullMarkets": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "PullMarkets",
+        "Handler": "lambda/index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "PullMarketsRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": "my-lambda-functions",
+          "S3Key": "PullMarketCode"
+        },
+        "Runtime": "nodejs8.10",
+        "Timeout": 300
+      }
+    },
+
+    "PullMarketsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "PullMarketsRole",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "lambda.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "Path": "/",
+        "Policies": [{
+          "PolicyName": "AWSLambdaBasicExecutionRole",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "*"
+            }]
+          }
+        },
+        {
+          "PolicyName": "AmazonS3FullAccess",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Allow",
+              "Action": "s3:*",
+              "Resource": [
+                "arn:aws:s3:::exchange-data-raw",
+                "arn:aws:s3:::exchange-data-raw/*"
+              ]
+            }]
+          }
+        }]
+      }
+    },
+
+    "PullMarketsSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "PullMarketsSchedule",
+        "Description": "Triggers a download of markets",
+        "ScheduleExpression": "rate(7 days)",
+        "Targets": [{
+          "Id": "PullMarketsScheduleTarget",
+          "Arn": {
+            "Fn::GetAtt": [ "PullMarkets", "Arn" ]
+          }
+        }],
+        "State": "ENABLED"
+      }
+    },
+
+    "PullMarketsScheduleInvokeLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "PullMarkets" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": { "Fn::GetAtt": [ "PullMarketsSchedule", "Arn" ] }
+      }
+    }
+
+  }
+
+  
+}
